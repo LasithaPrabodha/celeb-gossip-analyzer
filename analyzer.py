@@ -596,8 +596,8 @@ def main():
                     print("Warning: Training data must contain 'is_true' column. Adding sample labels...")
                     # Add random labels for demonstration
                     import numpy as np
-                    np.random.seed(42)
-                    train_data['is_true'] = np.random.randint(0, 2, size=len(train_data))
+                    rng = np.random.default_rng(seed=42)  # create a random number generator
+                    train_data['is_true'] = rng.integers(0, 2, size=len(train_data))
             except Exception as e:
                 print(f"Error loading training file: {e}")
                 print("Using sample data instead.")
