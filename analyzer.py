@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import re
 import os
 import pickle
@@ -369,7 +368,7 @@ class SriLankanCelebrityGossipAnalyzer:
         
         return result_df
     
-    def save_model(self, filepath='sl_celebrity_gossip_model.pkl'):
+    def save_model(self, filepath):
         """Save the trained model and preprocessing components"""
         if self.model is None:
             raise ValueError("Model must be trained before saving")
@@ -391,7 +390,7 @@ class SriLankanCelebrityGossipAnalyzer:
             print(f"Error saving model: {e}")
             return False
     
-    def load_model(self, filepath='sl_celebrity_gossip_model.pkl'):
+    def load_model(self, filepath):
         """Load a previously trained model"""
         try:
             with open(filepath, 'rb') as f:
