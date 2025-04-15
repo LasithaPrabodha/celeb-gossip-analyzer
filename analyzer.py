@@ -150,8 +150,8 @@ class SriLankanCelebrityGossipAnalyzer:
         try:
             data = pd.read_csv(csv_path)
             # Check for required column
-            if 'comment_text' not in data.columns:
-                raise ValueError("CSV must contain 'comment_text' column")
+            if 'Comment' not in data.columns:
+                raise ValueError("CSV must contain 'Comment' column")
             
             print(f"Loaded {len(data)} comments from {csv_path}")
             return data
@@ -167,53 +167,53 @@ class SriLankanCelebrityGossipAnalyzer:
         feature_df = df.copy()
         
         # Basic text features
-        feature_df['text_length'] = feature_df['comment_text'].apply(len)
-        feature_df['word_count'] = feature_df['comment_text'].apply(lambda x: len(str(x).split()))
+        feature_df['text_length'] = feature_df['Comment'].apply(len)
+        feature_df['word_count'] = feature_df['Comment'].apply(lambda x: len(str(x).split()))
         
         # Check for specific details
-        feature_df['has_specific_date'] = feature_df['comment_text'].apply(
+        feature_df['has_specific_date'] = feature_df['Comment'].apply(
             lambda x: bool(re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}\b', str(x)))
         )
-        feature_df['has_time'] = feature_df['comment_text'].apply(
+        feature_df['has_time'] = feature_df['Comment'].apply(
             lambda x: bool(re.search(r'\b\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)\b|\b\d{1,2}\s*o\'clock\b', str(x)))
         )
-        feature_df['has_location'] = feature_df['comment_text'].apply(
+        feature_df['has_location'] = feature_df['Comment'].apply(
             lambda x: any(location.lower() in str(x).lower() for location in SL_LOCATIONS)
         )
         
         # Celebrity mentions
-        feature_df['celebrity_mention_count'] = feature_df['comment_text'].apply(
+        feature_df['celebrity_mention_count'] = feature_df['Comment'].apply(
             lambda x: sum(1 for celeb in SL_CELEBRITIES if celeb.lower() in str(x).lower())
         )
         feature_df['has_celebrity_mention'] = feature_df['celebrity_mention_count'] > 0
         
         # Company/Studio mentions - important for boss-employee relationships
-        feature_df['company_mention_count'] = feature_df['comment_text'].apply(
+        feature_df['company_mention_count'] = feature_df['Comment'].apply(
             lambda x: sum(1 for company in SL_COMPANIES if company.lower() in str(x).lower())
         )
         feature_df['has_company_mention'] = feature_df['company_mention_count'] > 0
         
         # Privacy indicators
-        feature_df['privacy_terms_count'] = feature_df['comment_text'].apply(
+        feature_df['privacy_terms_count'] = feature_df['Comment'].apply(
             lambda x: sum(1 for term in PRIVACY_TERMS if term.lower() in str(x).lower())
         )
         feature_df['has_privacy_terms'] = feature_df['privacy_terms_count'] > 0
         
         # Credibility signals
-        feature_df['uses_firsthand_language'] = feature_df['comment_text'].apply(
+        feature_df['uses_firsthand_language'] = feature_df['Comment'].apply(
             lambda x: bool(re.search(r'\bI saw\b|\bI heard\b|\bI was there\b|\bI witnessed\b|\bI know\b|\bmy friend\b|\bmy colleague\b', str(x)))
         )
-        feature_df['contains_sensationalism'] = feature_df['comment_text'].apply(
+        feature_df['contains_sensationalism'] = feature_df['Comment'].apply(
             lambda x: any(term.lower() in str(x).lower() for term in SENSATIONALIST_TERMS)
         )
         
         # Check for relationship patterns between two entities
-        feature_df['has_relationship_pattern'] = feature_df['comment_text'].apply(
+        feature_df['has_relationship_pattern'] = feature_df['Comment'].apply(
             lambda x: bool(re.search(r'\b\w+\b.{1,30}\b(?:and|with)\b.{1,30}\b\w+\b', str(x)))
         )
         
         # Check for specific messaging platforms (common in sexting allegations)
-        feature_df['mentions_messaging_platform'] = feature_df['comment_text'].apply(
+        feature_df['mentions_messaging_platform'] = feature_df['Comment'].apply(
             lambda x: bool(re.search(r'\b(?:WhatsApp|Messenger|Instagram|DM|text message|SMS|iMessage|Telegram|Signal|Snapchat|TikTok)\b', str(x), re.IGNORECASE))
         )
         
@@ -228,7 +228,7 @@ class SriLankanCelebrityGossipAnalyzer:
                 temp_df = feature_df
                 
             # Named entity recognition
-            temp_df['named_entity_count'] = temp_df['comment_text'].apply(
+            temp_df['named_entity_count'] = temp_df['Comment'].apply(
                 lambda x: len([ent for ent in nlp(str(x)[:1000]).ents]) if pd.notnull(x) else 0
             )
             
@@ -246,7 +246,7 @@ class SriLankanCelebrityGossipAnalyzer:
         # Sentiment analysis - only if NLTK is available
         if nltk_available:
             print("Processing sentiment analysis with NLTK...")
-            feature_df['sentiment_score'] = feature_df['comment_text'].apply(
+            feature_df['sentiment_score'] = feature_df['Comment'].apply(
                 lambda x: sia.polarity_scores(str(x))['compound'] if pd.notnull(x) else 0
             )
         else:
@@ -255,7 +255,7 @@ class SriLankanCelebrityGossipAnalyzer:
         
         # Categorize gossip types
         for category, terms in GOSSIP_CATEGORIES.items():
-            feature_df[f'{category}_score'] = feature_df['comment_text'].apply(
+            feature_df[f'{category}_score'] = feature_df['Comment'].apply(
                 lambda x: sum(1 for term in terms if term.lower() in str(x).lower()) / len(terms)
             )
         
@@ -278,11 +278,11 @@ class SriLankanCelebrityGossipAnalyzer:
                 stop_words='english',
                 min_df=3
             )
-            text_features = self.vectorizer.fit_transform(feature_df['comment_text'].fillna(''))
+            text_features = self.vectorizer.fit_transform(feature_df['Comment'].fillna(''))
         else:
             if self.vectorizer is None:
                 raise ValueError("Vectorizer must be trained before prediction")
-            text_features = self.vectorizer.transform(feature_df['comment_text'].fillna(''))
+            text_features = self.vectorizer.transform(feature_df['Comment'].fillna(''))
         
         # Create a DataFrame for non-text features
         numeric_feature_df = feature_df[numeric_features].fillna(0)
@@ -362,7 +362,7 @@ class SriLankanCelebrityGossipAnalyzer:
         
         # Add category labels
         for category, terms in GOSSIP_CATEGORIES.items():
-            result_df[f'is_{category}'] = result_df['comment_text'].apply(
+            result_df[f'is_{category}'] = result_df['Comment'].apply(
                 lambda x: any(term.lower() in str(x).lower() for term in terms)
             )
         
@@ -469,7 +469,7 @@ class SriLankanCelebrityGossipAnalyzer:
         
         # Process each comment
         for idx, row in df.iterrows():
-            text = row['comment_text']
+            text = row['Comment']
             comment_pairs = find_name_pairs(text)
             
             for pair in comment_pairs:
@@ -501,7 +501,7 @@ class SriLankanCelebrityGossipAnalyzer:
         
         # Filter comments that mention private content
         result_df = df.copy()
-        result_df['suggests_private_content_shared'] = result_df['comment_text'].apply(has_private_content_indicators)
+        result_df['suggests_private_content_shared'] = result_df['Comment'].apply(has_private_content_indicators)
         
         # Filter high-risk comments (suggests private content + likely true)
         high_risk = result_df[result_df['suggests_private_content_shared'] & result_df.get('likely_true', False)]
@@ -566,7 +566,7 @@ def sample_labeled_data():
     
     # Create DataFrame
     df = pd.DataFrame({
-        'comment_text': comments,
+        'Comment': comments,
         'is_true': labels
     })
     
@@ -665,7 +665,7 @@ def main():
     
     # Show some example results
     print("\nExample Results (Top 5):")
-    columns_to_show = ['comment_text', 'likely_true', 'confidence_score'] + [f'is_{cat}' for cat in GOSSIP_CATEGORIES.keys()]
+    columns_to_show = ['Comment', 'likely_true', 'confidence_score'] + [f'is_{cat}' for cat in GOSSIP_CATEGORIES.keys()]
     print(results[columns_to_show].head())
     
     # Example of relationship extraction
@@ -692,7 +692,7 @@ def main():
     if not private_content.empty:
         print(f"Found {len(private_content)} comments suggesting private content sharing")
         print("\nMost concerning (by confidence):")
-        print(private_content.sort_values('confidence_score', ascending=False)[['comment_text', 'confidence_score']].head())
+        print(private_content.sort_values('confidence_score', ascending=False)[['Comment', 'confidence_score']].head())
         
         # Save private content findings
         private_file = input("\nEnter path to save private content findings (or press Enter for 'output/private_content_findings.csv'): ").strip()
