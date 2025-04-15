@@ -1,6 +1,7 @@
 import pandas as pd
 import re
 import os
+import numpy as np
 import pickle
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -46,104 +47,20 @@ except ImportError:
     print("Warning: spaCy not installed. NER features will be disabled.")
     spacy_available = False
 
-# Sri Lankan celebrity names (sample list - would need to be expanded)
-SL_CELEBRITIES = [
-    "Jacqueline Fernandez", "Yohani", "Bathiya and Santhush", "Pooja Umashankar", 
-    "Sangakkara", "Malinga", "Mahela", "Angelo Mathews", "Upul Tharanga",
-    "Roshan Mahanama", "Sanath Jayasuriya", "Mahinda Rajapaksa", "Gotabaya Rajapaksa",
-    "Sajith Premadasa", "Hiru Gossip", "Nehara Peiris", "Menaka Rajapaksa",
-    "Jackson Anthony", "Iraj", "Dinakshie Priyasad", "Shanudrie Priyasad",
-    "Ureshi Rajasinghe", "Santhush Weeraman", "Umaria Sinhawansa", "Bhathiya Jayakody",
-    "Natasha Rathnayake", "Hirunika Premachandra", "Stephanie Siriwardhana",
-    "Vinu Udani Siriwardana", "Sheshadri Priyasad", "Sangeetha Weeraratne",
-    "Daisy Achchi", "Namal Rajapaksa", "Sudu Aiya", "Peshala", "Ryan Van Rooyen",
-    "Piumi Hansamali", "Sachini Nipunsala", "Nadeesha Hemamali", "Samanalee Fonseka"
-]
-
-# Sri Lankan media companies, studios, production houses
-SL_COMPANIES = [
-    "Derana", "Sirasa", "Hiru", "Swarnavahini", "Rupavahini", "ITN", "TV Derana",
-    "Sirasa TV", "Hiru TV", "Swarnavahini TV", "Rupavahini TV", "Shakthi TV",
-    "EAP Films", "Torana Video", "Sarasaviya", "Maharaja Organization", "Dialog",
-    "SLT Mobitel", "Etisalat", "Airtel", "Laxapana Studios", "Ceylon Theatres",
-    "EAP Holdings", "Wijeya Newspapers", "Lanka Films", "Ranmihitenna Film Studio",
-    "Unlimited Entertainment", "Power House", "Red Hen Productions",
-    "Exceptional Entertainment", "Lyca Productions"
-]
-
-# Sri Lankan locations and venues
-SL_LOCATIONS = [
-    "Colombo", "Kandy", "Galle", "Negombo", "Jaffna", "Anuradhapura", "Batticaloa",
-    "Trincomalee", "Nuwara Eliya", "Matara", "Odel", "Cinnamon Grand", "Taj Samudra",
-    "Kingsbury", "Liberty Cinema", "Majestic City", "Nelum Pokuna", "BMICH",
-    "Shangri-La", "Hilton Colombo", "Viharamahadevi Park", "Mount Lavinia Hotel",
-    "Independence Square", "Arcade Independence Square", "Race Course", "Dutch Hospital",
-    "Water's Edge", "Excel World", "Galle Face Hotel", "Galadari Hotel", "Jetwing Hotels",
-    "Colombo City Centre", "Crescat Boulevard", "Marino Mall", "One Galle Face",
-    "Bandaranaike Memorial International Conference Hall", "Lotus Pond Theatre"
-]
-
-# Sensationalist language specific to Sri Lankan gossip
-SENSATIONALIST_TERMS = [
-    "shocking", "bombshell", "scandal", "exclusive", "secret affair", "caught in the act",
-    "breaking news", "exposed", "you won't believe", "leaked", "insider information",
-    "drama", "controversy", "disaster", "disgrace", "shame", "infamous", "rumors",
-    "sources close to", "anonymous source", "unnamed insider", "relationship drama",
-    # Local terms and transliterated terms
-    "keliya", "rasthiyadu", "hoda show", "hada", "pissu", "bayanak", "kunu harapa",
-    "kohulan maththa", "jalaya", "baduwa", "katakaranawa", "asammanai"
-]
-
-# Specific categories of gossip based on your requirements
-GOSSIP_CATEGORIES = {
-    'secret_affair': [
-        "affair", "secret relationship", "romance", "dating", "seeing each other", 
-        "together", "intimate", "lovers", "cheating", "two-timing", "unfaithful", 
-        "behind closed doors", "private meetings", "secret rendezvous", "hidden relationship",
-        "meeting secretly", "sneaking around", "secret lover", "affair with", "caught together",
-        "spotted together", "spending time together", "close relationship", "more than friends"
-    ],
-    
-    'sexting': [
-        "sexting", "explicit messages", "nude", "private photos", "intimate pictures", 
-        "inappropriate texts", "leaked messages", "personal chat", "explicit content",
-        "private conversation", "WhatsApp leak", "Instagram DM", "private DM", "messenger chat",
-        "compromising photos", "revealing photos", "dirty messages", "flirty texts",
-        "suggestive messages", "bedroom photos", "shower pictures", "inappropriate content",
-        "private video call", "video scandal"
-    ],
-    
-    'boss_employee': [
-        "boss", "director", "producer", "manager", "supervisor", "senior", "junior",
-        "assistant", "staff", "employee", "workplace relationship", "office romance",
-        "professional relationship", "working together", "professional boundaries",
-        "power imbalance", "casting couch", "favoritism", "special treatment", 
-        "promotion", "career advancement", "mentor", "protege", "contract", "work relationship",
-        "film set", "production", "studio", "company", "agency", "talent agency"
-    ],
-    
-    'celebrity_fan': [
-        "fan", "follower", "admirer", "supporter", "devotee", "fan club", "fan meeting",
-        "meet and greet", "selfie", "autograph", "photo with fan", "fan encounter",
-        "fan interaction", "obsessed fan", "stalker", "fan mail", "message from fan",
-        "fan gift", "meeting fan", "private meeting", "special fan", "loyal fan",
-        "dedicated fan", "fan relationship", "social media fan"
-    ]
-}
-
-# Privacy related terms
-PRIVACY_TERMS = [
-    "private", "personal", "confidential", "intimate", "secret", "leaked", "exposed",
-    "hacked", "unauthorized", "not meant to be shared", "hidden", "sensitive",
-    "not for public", "behind closed doors", "off the record", "anonymous",
-    "private account", "personal device", "personal chat", "locked", "password protected"
-]
+from sl_celebrity_data import (
+    SL_CELEBRITIES, SL_CELEBRITY_NICKNAMES, SL_COMPANIES, SL_LOCATIONS,
+    SENSATIONALIST_TERMS, GOSSIP_CATEGORIES, PRIVACY_TERMS, 
+    RELATIONSHIP_PROXIMITY_TERMS, TIME_PATTERNS, DATE_PATTERNS,
+    CREDIBILITY_INDICATORS, MESSAGING_PLATFORMS, RELATIONSHIP_PATTERNS,
+    LOCATION_PATTERNS, SENTIMENT_WORDS, EVENT_TYPES
+)
 
 class SriLankanCelebrityGossipAnalyzer:
     def __init__(self):
         self.model = None
         self.vectorizer = None
         self.feature_names = None
+        self.scaler = None
     
     def load_data(self, csv_path):
         """Load and prepare data from CSV file"""
@@ -170,21 +87,36 @@ class SriLankanCelebrityGossipAnalyzer:
         feature_df['text_length'] = feature_df['Comment'].apply(len)
         feature_df['word_count'] = feature_df['Comment'].apply(lambda x: len(str(x).split()))
         
-        # Check for specific details
+        # Check for specific dates using enhanced date patterns
         feature_df['has_specific_date'] = feature_df['Comment'].apply(
-            lambda x: bool(re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}\b', str(x)))
-        )
-        feature_df['has_time'] = feature_df['Comment'].apply(
-            lambda x: bool(re.search(r'\b\d{1,2}(?::\d{2})?\s*(?:am|pm|AM|PM)\b|\b\d{1,2}\s*o\'clock\b', str(x)))
-        )
-        feature_df['has_location'] = feature_df['Comment'].apply(
-            lambda x: any(location.lower() in str(x).lower() for location in SL_LOCATIONS)
+            lambda x: any(bool(re.search(pattern, str(x), re.IGNORECASE)) for pattern in DATE_PATTERNS)
         )
         
-        # Celebrity mentions
-        feature_df['celebrity_mention_count'] = feature_df['Comment'].apply(
-            lambda x: sum(1 for celeb in SL_CELEBRITIES if celeb.lower() in str(x).lower())
+        # Check for specific times using enhanced time patterns
+        feature_df['has_time'] = feature_df['Comment'].apply(
+            lambda x: any(bool(re.search(pattern, str(x), re.IGNORECASE)) for pattern in TIME_PATTERNS)
         )
+        
+        # Location detection
+        feature_df['has_location'] = feature_df['Comment'].apply(
+            lambda x: any(location.lower() in str(x).lower() for location in SL_LOCATIONS) or 
+                     any(bool(re.search(pattern, str(x), re.IGNORECASE)) for pattern in LOCATION_PATTERNS)
+        )
+        
+        # Celebrity mentions including nickname resolution
+        def count_celebrity_mentions(text):
+            text = str(text).lower()
+            direct_mentions = sum(1 for celeb in SL_CELEBRITIES if celeb.lower() in text)
+            
+            # Check for nicknames and count them
+            nickname_mentions = 0
+            for nickname, full_name in SL_CELEBRITY_NICKNAMES.items():
+                if nickname.lower() in text:
+                    nickname_mentions += 1
+            
+            return direct_mentions + nickname_mentions
+        
+        feature_df['celebrity_mention_count'] = feature_df['Comment'].apply(count_celebrity_mentions)
         feature_df['has_celebrity_mention'] = feature_df['celebrity_mention_count'] > 0
         
         # Company/Studio mentions - important for boss-employee relationships
@@ -193,29 +125,77 @@ class SriLankanCelebrityGossipAnalyzer:
         )
         feature_df['has_company_mention'] = feature_df['company_mention_count'] > 0
         
-        # Privacy indicators
+        # Privacy indicators using enhanced PRIVACY_TERMS
         feature_df['privacy_terms_count'] = feature_df['Comment'].apply(
             lambda x: sum(1 for term in PRIVACY_TERMS if term.lower() in str(x).lower())
         )
         feature_df['has_privacy_terms'] = feature_df['privacy_terms_count'] > 0
         
-        # Credibility signals
-        feature_df['uses_firsthand_language'] = feature_df['Comment'].apply(
-            lambda x: bool(re.search(r'\bI saw\b|\bI heard\b|\bI was there\b|\bI witnessed\b|\bI know\b|\bmy friend\b|\bmy colleague\b', str(x)))
+        # Credibility signals using enhanced CREDIBILITY_INDICATORS
+        feature_df['firsthand_language_count'] = feature_df['Comment'].apply(
+            lambda x: sum(1 for term in CREDIBILITY_INDICATORS['firsthand'] if term.lower() in str(x).lower())
         )
-        feature_df['contains_sensationalism'] = feature_df['Comment'].apply(
-            lambda x: any(term.lower() in str(x).lower() for term in SENSATIONALIST_TERMS)
+        feature_df['hearsay_language_count'] = feature_df['Comment'].apply(
+            lambda x: sum(1 for term in CREDIBILITY_INDICATORS['hearsay'] if term.lower() in str(x).lower())
+        )
+        feature_df['speculation_language_count'] = feature_df['Comment'].apply(
+            lambda x: sum(1 for term in CREDIBILITY_INDICATORS['speculation'] if term.lower() in str(x).lower())
         )
         
-        # Check for relationship patterns between two entities
+        feature_df['credibility_score'] = feature_df.apply(
+            lambda row: (row['firsthand_language_count'] - row['hearsay_language_count'] - 
+                         0.5 * row['speculation_language_count']), axis=1
+        )
+        
+        # Sensationalism using enhanced SENSATIONALIST_TERMS
+        feature_df['sensationalism_count'] = feature_df['Comment'].apply(
+            lambda x: sum(1 for term in SENSATIONALIST_TERMS if term.lower() in str(x).lower())
+        )
+        feature_df['contains_sensationalism'] = feature_df['sensationalism_count'] > 0
+        
+        # Check for relationship patterns between two entities using enhanced RELATIONSHIP_PATTERNS
         feature_df['has_relationship_pattern'] = feature_df['Comment'].apply(
-            lambda x: bool(re.search(r'\b\w+\b.{1,30}\b(?:and|with)\b.{1,30}\b\w+\b', str(x)))
+            lambda x: any(bool(re.search(pattern, str(x), re.IGNORECASE)) for pattern in RELATIONSHIP_PATTERNS)
+        )
+        
+        # Check for relationship proximity terms
+        feature_df['relationship_proximity_score'] = feature_df['Comment'].apply(
+            lambda x: sum(1 for term in RELATIONSHIP_PROXIMITY_TERMS if term.lower() in str(x).lower()) / 
+                      len(RELATIONSHIP_PROXIMITY_TERMS)
         )
         
         # Check for specific messaging platforms (common in sexting allegations)
-        feature_df['mentions_messaging_platform'] = feature_df['Comment'].apply(
-            lambda x: bool(re.search(r'\b(?:WhatsApp|Messenger|Instagram|DM|text message|SMS|iMessage|Telegram|Signal|Snapchat|TikTok)\b', str(x), re.IGNORECASE))
+        feature_df['messaging_platform_count'] = feature_df['Comment'].apply(
+            lambda x: sum(1 for platform in MESSAGING_PLATFORMS if platform.lower() in str(x).lower())
         )
+        feature_df['mentions_messaging_platform'] = feature_df['messaging_platform_count'] > 0
+        
+        # Event type detection
+        feature_df['event_type_count'] = feature_df['Comment'].apply(
+            lambda x: sum(1 for event_type in EVENT_TYPES if event_type.lower() in str(x).lower())
+        )
+        feature_df['mentions_event'] = feature_df['event_type_count'] > 0
+        
+        # Sentiment analysis using built-in dictionaries if NLTK is not available
+        if not nltk_available:
+            def basic_sentiment_score(text):
+                text = str(text).lower()
+                positive_count = sum(1 for term in SENTIMENT_WORDS['positive'] if term.lower() in text)
+                negative_count = sum(1 for term in SENTIMENT_WORDS['negative'] if term.lower() in text)
+                
+                total_words = len(text.split())
+                if total_words == 0:
+                    return 0
+                
+                # Return normalized difference between positive and negative
+                return (positive_count - negative_count) / (positive_count + negative_count + 1)
+            
+            feature_df['sentiment_score'] = feature_df['Comment'].apply(basic_sentiment_score)
+        else:
+            print("Processing sentiment analysis with NLTK...")
+            feature_df['sentiment_score'] = feature_df['Comment'].apply(
+                lambda x: sia.polarity_scores(str(x))['compound'] if pd.notnull(x) else 0
+            )
         
         # NLP-based features - only if available
         if spacy_available:
@@ -243,29 +223,28 @@ class SriLankanCelebrityGossipAnalyzer:
             print("SpaCy not available - skipping entity recognition")
             feature_df['named_entity_count'] = 0
         
-        # Sentiment analysis - only if NLTK is available
-        if nltk_available:
-            print("Processing sentiment analysis with NLTK...")
-            feature_df['sentiment_score'] = feature_df['Comment'].apply(
-                lambda x: sia.polarity_scores(str(x))['compound'] if pd.notnull(x) else 0
-            )
-        else:
-            print("NLTK not available - skipping sentiment analysis")
-            feature_df['sentiment_score'] = 0
-        
-        # Categorize gossip types
+        # Categorize gossip types with more detailed scoring
         for category, terms in GOSSIP_CATEGORIES.items():
-            feature_df[f'{category}_score'] = feature_df['Comment'].apply(
-                lambda x: sum(1 for term in terms if term.lower() in str(x).lower()) / len(terms)
+            # Count raw term occurrences
+            feature_df[f'{category}_term_count'] = feature_df['Comment'].apply(
+                lambda x: sum(1 for term in terms if term.lower() in str(x).lower())
             )
+            
+            # Calculate normalized score (0-1 range)
+            feature_df[f'{category}_score'] = feature_df[f'{category}_term_count'] / max(len(terms) / 3, 1)
+            # Cap at 1.0
+            feature_df[f'{category}_score'] = feature_df[f'{category}_score'].clip(upper=1.0)
         
         # Extract numerical features for model training
         numeric_features = [
             'text_length', 'word_count', 'has_specific_date', 'has_time', 'has_location',
             'celebrity_mention_count', 'has_celebrity_mention', 'company_mention_count',
             'has_company_mention', 'privacy_terms_count', 'has_privacy_terms',
-            'uses_firsthand_language', 'contains_sensationalism', 'has_relationship_pattern',
-            'mentions_messaging_platform', 'named_entity_count', 'sentiment_score'
+            'firsthand_language_count', 'hearsay_language_count', 'speculation_language_count',
+            'credibility_score', 'sensationalism_count', 'contains_sensationalism', 
+            'has_relationship_pattern', 'relationship_proximity_score',
+            'messaging_platform_count', 'mentions_messaging_platform',
+            'event_type_count', 'mentions_event', 'named_entity_count', 'sentiment_score'
         ] + [f'{category}_score' for category in GOSSIP_CATEGORIES.keys()]
         
         self.feature_names = numeric_features
@@ -332,6 +311,30 @@ class SriLankanCelebrityGossipAnalyzer:
         
         # Save preprocessing components
         self.scaler = scaler
+        
+        # Feature importance analysis
+        if hasattr(self.model, 'feature_importances_'):
+            # Get text feature names
+            if hasattr(self.vectorizer, 'get_feature_names_out'):
+                text_feature_names = self.vectorizer.get_feature_names_out()
+            else:
+                text_feature_names = self.vectorizer.get_feature_names()
+                
+            # Combine with numeric feature names
+            all_feature_names = list(text_feature_names) + list(self.feature_names)
+            
+            # Get feature importances
+            importances = self.model.feature_importances_
+            
+            # Sort features by importance
+            indices = np.argsort(importances)[::-1]
+            
+            print("\nTop 20 most important features:")
+            for i in range(min(20, len(indices))):
+                if indices[i] < len(text_feature_names):
+                    print(f"{all_feature_names[indices[i]]}: {importances[indices[i]]:.4f}")
+                else:
+                    print(f"{all_feature_names[indices[i]]} (numeric): {importances[indices[i]]:.4f}")
         
         return self.model
     
@@ -435,49 +438,76 @@ class SriLankanCelebrityGossipAnalyzer:
         return result_df
     
     def extract_relationship_pairs(self, df):
-        """Extract potential relationship pairs from comments"""
+        """Extract potential relationship pairs from comments with enhanced detection"""
         pairs = []
         
         # Function to find pairs of names in text
-        def find_name_pairs(text):
+        def find_name_pairs(text, comment_score=0, row_id=None):
             text = str(text)
             found_pairs = []
             
-            # Check each celebrity against others
-            for celeb1 in SL_CELEBRITIES:
-                if celeb1.lower() in text.lower():
-                    for celeb2 in SL_CELEBRITIES:
-                        # Don't match the same person
-                        if celeb1 != celeb2 and celeb2.lower() in text.lower():
-                            # Check if they appear close to each other with relationship terms
-                            celeb1_pos = text.lower().find(celeb1.lower())
-                            celeb2_pos = text.lower().find(celeb2.lower())
-                            
-                            # Calculate the distance between mentions
-                            distance = abs(celeb1_pos - celeb2_pos)
-                            
-                            # If they're mentioned within reasonable distance
-                            if distance < 100:
-                                # Check for relationship terms between them
-                                between_text = text[min(celeb1_pos, celeb2_pos):max(celeb1_pos, celeb2_pos)]
-                                relationship_terms = ["and", "with", "dating", "affair", "together", "relationship", "romance"]
+            # Check for direct matches using enhanced RELATIONSHIP_PATTERNS
+            for pattern in RELATIONSHIP_PATTERNS:
+                matches = re.finditer(pattern, text, re.IGNORECASE)
+                for match in matches:
+                    # Extract the potential person names from the match
+                    person1 = match.group(1)
+                    person2 = match.group(2)
+                    
+                    # Verify if these are actual celebrities in our list
+                    celeb1 = next((c for c in SL_CELEBRITIES if c.lower() in person1.lower()), None)
+                    celeb2 = next((c for c in SL_CELEBRITIES if c.lower() in person2.lower()), None)
+                    
+                    # If both are celebrities, add the pair
+                    if celeb1 and celeb2 and celeb1 != celeb2:
+                        context = text[max(0, match.start()-50):min(len(text), match.end()+50)]
+                        found_pairs.append((celeb1, celeb2, context))
+            
+            # If no pairs found through patterns, use the original approach
+            if not found_pairs:
+                # Check each celebrity against others
+                for celeb1 in SL_CELEBRITIES:
+                    if celeb1.lower() in text.lower():
+                        for celeb2 in SL_CELEBRITIES:
+                            # Don't match the same person
+                            if celeb1 != celeb2 and celeb2.lower() in text.lower():
+                                # Check if they appear close to each other with relationship terms
+                                celeb1_pos = text.lower().find(celeb1.lower())
+                                celeb2_pos = text.lower().find(celeb2.lower())
                                 
-                                if any(term in between_text.lower() for term in relationship_terms):
-                                    found_pairs.append((celeb1, celeb2))
+                                # Calculate the distance between mentions
+                                distance = abs(celeb1_pos - celeb2_pos)
+                                
+                                # If they're mentioned within reasonable distance
+                                if distance < 100:
+                                    # Get context around the names
+                                    context_start = max(0, min(celeb1_pos, celeb2_pos) - 50)
+                                    context_end = min(len(text), max(celeb1_pos, celeb2_pos) + 50)
+                                    context = text[context_start:context_end]
+                                    
+                                    # Check for relationship terms between them
+                                    between_text = text[min(celeb1_pos, celeb2_pos):max(celeb1_pos, celeb2_pos)]
+                                    
+                                    # Check for relationship proximity terms
+                                    if any(term.lower() in between_text.lower() for term in RELATIONSHIP_PROXIMITY_TERMS):
+                                        found_pairs.append((celeb1, celeb2, context))
             
             return found_pairs
         
         # Process each comment
         for idx, row in df.iterrows():
             text = row['Comment']
-            comment_pairs = find_name_pairs(text)
+            comment_pairs = find_name_pairs(text, row.get('confidence_score', 0), idx)
             
             for pair in comment_pairs:
+                celeb1, celeb2, context = pair
                 pairs.append({
-                    'person1': pair[0],
-                    'person2': pair[1],
+                    'person1': celeb1,
+                    'person2': celeb2,
+                    'context': context,
                     'confidence_score': row.get('confidence_score', 0),
                     'likely_true': row.get('likely_true', False),
+                    'comment_id': idx,
                     'comment': text
                 })
         
@@ -486,30 +516,156 @@ class SriLankanCelebrityGossipAnalyzer:
             pairs_df = pd.DataFrame(pairs)
             return pairs_df
         else:
-            return pd.DataFrame(columns=['person1', 'person2', 'confidence_score', 'likely_true', 'comment'])
+            return pd.DataFrame(columns=['person1', 'person2', 'context', 'confidence_score', 'likely_true', 'comment_id', 'comment'])
 
     def detect_private_content_sharing(self, df):
-        """Detect comments that suggest private content has been shared"""
-        private_content_indicators = [
-            "leaked", "private photos", "nude", "personal chat", "hacked", 
-            "sexting", "WhatsApp", "screenshot", "personal messages", "private messages",
-            "intimate photos", "bedroom photos", "shower photos", "exposed"
-        ]
+        """
+        Enhanced detection of comments that suggest private content has been shared
+        using the expanded privacy terms
+        """
+        # Use the enhanced PRIVACY_TERMS combined with GOSSIP_CATEGORIES['sexting']
+        private_content_indicators = PRIVACY_TERMS + GOSSIP_CATEGORIES['sexting']
         
-        def has_private_content_indicators(text):
-            return any(indicator.lower() in str(text).lower() for indicator in private_content_indicators)
+        def private_content_score(text):
+            text = str(text).lower()
+            matches = sum(1 for indicator in private_content_indicators if indicator.lower() in text)
+            # Normalize score
+            return min(matches / 5, 1.0)  # Cap at 1.0
         
         # Filter comments that mention private content
         result_df = df.copy()
-        result_df['suggests_private_content_shared'] = result_df['Comment'].apply(has_private_content_indicators)
+        result_df['private_content_score'] = result_df['Comment'].apply(private_content_score)
+        result_df['suggests_private_content_shared'] = result_df['private_content_score'] > 0.2
+        
+        # Check for specific messaging platforms
+        result_df['mentions_messaging_platform'] = result_df['Comment'].apply(
+            lambda x: any(platform.lower() in str(x).lower() for platform in MESSAGING_PLATFORMS)
+        )
+        
+        # Combined risk score
+        result_df['privacy_risk_score'] = result_df.apply(
+            lambda row: row['private_content_score'] * (1.5 if row['mentions_messaging_platform'] else 1.0), 
+            axis=1
+        )
         
         # Filter high-risk comments (suggests private content + likely true)
-        high_risk = result_df[result_df['suggests_private_content_shared'] & result_df.get('likely_true', False)]
+        high_risk = result_df[
+            (result_df['privacy_risk_score'] > 0.4) & 
+            result_df.get('likely_true', pd.Series([True] * len(result_df)))
+        ]
+        
+        # Sort by risk score
+        high_risk = high_risk.sort_values('privacy_risk_score', ascending=False)
         
         print(f"\nDetected {len(high_risk)} high-risk comments that may involve sharing of private content")
         
         return high_risk
-
+    
+    def analyze_celebrity_network(self, pairs_df, min_confidence=0.5):
+        """
+        Analyze the network of relationship connections between celebrities
+        based on extracted pairs
+        """
+        # Filter for pairs with sufficient confidence
+        filtered_pairs = pairs_df[pairs_df['confidence_score'] >= min_confidence]
+        
+        # Count co-mentions for each pair
+        pair_counts = {}
+        for _, row in filtered_pairs.iterrows():
+            # Ensure consistent ordering of pairs
+            pair = tuple(sorted([row['person1'], row['person2']]))
+            if pair in pair_counts:
+                pair_counts[pair] += 1
+            else:
+                pair_counts[pair] = 1
+        
+        # Convert to DataFrame
+        network_df = pd.DataFrame([
+            {'person1': pair[0], 'person2': pair[1], 'mentions': count}
+            for pair, count in pair_counts.items()
+        ])
+        
+        # Sort by mention count
+        if not network_df.empty:
+            network_df = network_df.sort_values('mentions', ascending=False)
+            
+            print("\nCelebrity Relationship Network Analysis:")
+            print(f"Found {len(network_df)} potential relationship connections")
+            print("\nTop relationship connections:")
+            for i, row in network_df.head(10).iterrows():
+                print(f"{row['person1']} - {row['person2']}: {row['mentions']} mentions")
+            
+            return network_df
+        else:
+            print("\nNo significant relationship connections found")
+            return pd.DataFrame(columns=['person1', 'person2', 'mentions'])
+    
+    def identify_trending_gossip(self, df, threshold=0.7):
+        """
+        Identify trending gossip topics and most mentioned celebrities
+        """
+        # Filter for high-confidence comments
+        high_conf = df[df['confidence_score'] >= threshold].copy()
+        
+        # Count celebrity mentions
+        celeb_counts = {}
+        for _, row in high_conf.iterrows():
+            comment = str(row['Comment']).lower()
+            for celeb in SL_CELEBRITIES:
+                if celeb.lower() in comment:
+                    if celeb in celeb_counts:
+                        celeb_counts[celeb] += 1
+                    else:
+                        celeb_counts[celeb] = 1
+            
+            # Also check nicknames
+            for nickname, full_name in SL_CELEBRITY_NICKNAMES.items():
+                if nickname.lower() in comment:
+                    if full_name in celeb_counts:
+                        celeb_counts[full_name] += 1
+                    else:
+                        celeb_counts[full_name] = 1
+        
+        # Convert to DataFrame
+        celeb_df = pd.DataFrame([
+            {'celebrity': celeb, 'mentions': count}
+            for celeb, count in celeb_counts.items()
+        ])
+        
+        # Sort by mention count
+        if not celeb_df.empty:
+            celeb_df = celeb_df.sort_values('mentions', ascending=False)
+            
+            # Category analysis for each celebrity
+            top_celebs = celeb_df.head(10)['celebrity'].tolist()
+            celeb_categories = {}
+            
+            for celeb in top_celebs:
+                celeb_comments = high_conf[high_conf['Comment'].str.lower().str.contains(celeb.lower())]
+                category_counts = {}
+                
+                for category in GOSSIP_CATEGORIES.keys():
+                    cat_count = sum(celeb_comments[f'is_{category}']) if f'is_{category}' in celeb_comments.columns else 0
+                    if cat_count > 0:
+                        category_counts[category] = cat_count
+                
+                celeb_categories[celeb] = category_counts
+            
+            print("\nTrending Celebrity Gossip Analysis:")
+            print(f"Analyzed {len(high_conf)} high-confidence comments")
+            print("\nMost mentioned celebrities:")
+            for i, row in top_celebs[:10]:
+                print(f"{i+1}. {row['celebrity']}: {row['mentions']} mentions")
+                if row['celebrity'] in celeb_categories:
+                    cat_str = ", ".join([f"{cat.replace('_', ' ')}: {count}" 
+                                       for cat, count in celeb_categories[row['celebrity']].items()])
+                    print(f"   Topics: {cat_str}")
+            
+            return celeb_df, celeb_categories
+        else:
+            print("\nNo significant celebrity mentions found")
+            return pd.DataFrame(columns=['celebrity', 'mentions']), {}
+        
 def sample_labeled_data():
     """Create a sample dataset for demonstration purposes focusing on relationship gossip"""
     comments = [
@@ -594,7 +750,6 @@ def main():
                 if 'is_true' not in train_data.columns:
                     print("Warning: Training data must contain 'is_true' column. Adding sample labels...")
                     # Add random labels for demonstration
-                    import numpy as np
                     rng = np.random.default_rng(seed=42)  # create a random number generator
                     train_data['is_true'] = rng.integers(0, 2, size=len(train_data))
             except Exception as e:
